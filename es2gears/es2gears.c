@@ -49,9 +49,11 @@
 #include <string.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <GLES2/gl2.h>
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
+
+#include <libuhmigl.h>
+
+#define LOG_TAG "uhmitest"
+#include <pr.h>
 
 #define STRIPS_PER_TOOTH 7
 #define VERTICES_PER_TOOTH 46
@@ -72,19 +74,22 @@ struct gear {
    GLuint vbo;
 };
 
-/** The view rotation [x, y, z] */
-static GLfloat view_rot[3] = { 20.0, 30.0, 0.0 };
-/** The gears */
-static struct gear *gear1, *gear2, *gear3;
-/** The current gear rotation angle */
-static GLfloat angle = 0.0;
-/** The location of the shader uniforms */
-static GLuint ModelViewProjectionMatrix_location,
-              NormalMatrix_location,
-              LightSourcePosition_location,
-              MaterialColor_location;
-/** The projection matrix */
-static GLfloat ProjectionMatrix[16];
+struct es2gears_state {
+   /** The view rotation [x, y, z] */
+   GLfloat view_rot[3];
+   /** The gears */
+   struct gear *gear1, *gear2, *gear3;
+   /** The current gear rotation angle */
+   GLfloat angle;
+   /** The location of the shader uniforms */
+   GLuint ModelViewProjectionMatrix_location,
+               NormalMatrix_location,
+               LightSourcePosition_location,
+               MaterialColor_location;
+   /** The projection matrix */
+   GLfloat ProjectionMatrix[16];
+};
+
 /** The direction of the directional light for the scene */
 static const GLfloat LightSourcePosition[4] = { 5.0, 5.0, 10.0, 1.0};
 
@@ -277,6 +282,12 @@ create_gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
    return gear;
 }
 
+static void free_gear(struct gear *gear)
+{
+	free(gear->vertices);
+	free(gear);
+}
+
 /**
  * Multiplies two 4x4 matrices.
  *
@@ -452,7 +463,7 @@ frustum(GLfloat *m, GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLflo
  * @param color the color of the gear
  */
 static void
-draw_gear(struct gear *gear, GLfloat *transform,
+draw_gear(struct es2gears_state * state, struct gear *gear, GLfloat *transform,
       GLfloat x, GLfloat y, GLfloat angle, const GLfloat color[4])
 {
    GLfloat model_view[16];
@@ -465,10 +476,10 @@ draw_gear(struct gear *gear, GLfloat *transform,
    rotate(model_view, 2 * M_PI * angle / 360.0, 0, 0, 1);
 
    /* Create and set the ModelViewProjectionMatrix */
-   memcpy(model_view_projection, ProjectionMatrix, sizeof(model_view_projection));
+   memcpy(model_view_projection, state->ProjectionMatrix, sizeof(model_view_projection));
    multiply(model_view_projection, model_view);
 
-   glUniformMatrix4fv(ModelViewProjectionMatrix_location, 1, GL_FALSE,
+   glUniformMatrix4fv(state->ModelViewProjectionMatrix_location, 1, GL_FALSE,
                       model_view_projection);
 
    /*
@@ -478,10 +489,10 @@ draw_gear(struct gear *gear, GLfloat *transform,
    memcpy(normal_matrix, model_view, sizeof (normal_matrix));
    invert(normal_matrix);
    transpose(normal_matrix);
-   glUniformMatrix4fv(NormalMatrix_location, 1, GL_FALSE, normal_matrix);
+   glUniformMatrix4fv(state->NormalMatrix_location, 1, GL_FALSE, normal_matrix);
 
    /* Set the gear color */
-   glUniform4fv(MaterialColor_location, 1, color);
+   glUniform4fv(state->MaterialColor_location, 1, color);
 
    /* Set the vertex buffer object to use */
    glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
@@ -490,7 +501,8 @@ draw_gear(struct gear *gear, GLfloat *transform,
    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
          6 * sizeof(GLfloat), NULL);
    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
-         6 * sizeof(GLfloat), (GLfloat *) 0 + 3);
+         // 6 * sizeof(GLfloat), (GLfloat *) 0 + 3);
+         6 * sizeof(GLfloat), (void *)(sizeof(GLfloat) * 3));
 
    /* Enable the attributes */
    glEnableVertexAttribArray(0);
@@ -507,7 +519,7 @@ draw_gear(struct gear *gear, GLfloat *transform,
 /**
  * Draws the gears.
  */
-void es2gears_draw(void)
+void es2gears_draw(struct es2gears_state * state)
 {
    static const GLfloat   red[4] = { 0.8, 0.1, 0.0, 1.0 };
    static const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
@@ -520,14 +532,14 @@ void es2gears_draw(void)
 
    /* Translate and rotate the view */
    translate(transform, 0, 0, -40);
-   rotate(transform, 2 * M_PI * view_rot[0] / 360.0, 1, 0, 0);
-   rotate(transform, 2 * M_PI * view_rot[1] / 360.0, 0, 1, 0);
-   rotate(transform, 2 * M_PI * view_rot[2] / 360.0, 0, 0, 1);
+   rotate(transform, 2 * M_PI * state->view_rot[0] / 360.0, 1, 0, 0);
+   rotate(transform, 2 * M_PI * state->view_rot[1] / 360.0, 0, 1, 0);
+   rotate(transform, 2 * M_PI * state->view_rot[2] / 360.0, 0, 0, 1);
 
    /* Draw the gears */
-   draw_gear(gear1, transform, -3.0, -2.0,      angle,        red);
-   draw_gear(gear2, transform,  3.1, -2.0, -2 * angle - 9.0,  green);
-   draw_gear(gear3, transform, -3.1,  4.2, -2 * angle - 25.0, blue);
+   draw_gear(state, state->gear1, transform, -3.0, -2.0,      state->angle,        red);
+   draw_gear(state, state->gear2, transform,  3.1, -2.0, -2 * state->angle - 9.0,  green);
+   draw_gear(state, state->gear3, transform, -3.1,  4.2, -2 * state->angle - 25.0, blue);
 }
 
 /**
@@ -536,11 +548,11 @@ void es2gears_draw(void)
  * @param width the window width
  * @param height the window height
  */
-void es2gears_reshape(int width, int height)
+void es2gears_reshape(struct es2gears_state * state, int width, int height)
 {
    /* Update the projection matrix */
    GLfloat h = (GLfloat)height / (GLfloat)width;
-   frustum(ProjectionMatrix, -1.0, 1.0, -h, h, 5.0, 60.0);
+   frustum(state->ProjectionMatrix, -1.0, 1.0, -h, h, 5.0, 60.0);
 
    /* Set the viewport */
    glViewport(0, 0, (GLint) width, (GLint) height);
@@ -572,7 +584,7 @@ void es2gears_special(int special)
 
 #endif
 
-void es2gears_idle(unsigned long int elapsed_time_ms)
+void es2gears_idle(struct es2gears_state * state, unsigned long int elapsed_time_ms)
 {
    static int frames = 0;
    static double tRot0 = -1.0, tRate0 = -1.0;
@@ -584,9 +596,9 @@ void es2gears_idle(unsigned long int elapsed_time_ms)
    tRot0 = t;
 
    /* advance rotation for next frame */
-   angle += 70.0 * dt;  /* 70 degrees per second */
-   if (angle > 3600.0)
-      angle -= 3600.0;
+   state->angle += 70.0 * dt;  /* 70 degrees per second */
+   if (state->angle > 3600.0)
+      state->angle -= 3600.0;
 
    // eglutPostRedisplay();
    frames++;
@@ -642,11 +654,21 @@ static const char fragment_shader[] =
 "    gl_FragColor = Color;\n"
 "}";
 
-void es2gears_init(void)
+struct es2gears_state *es2gears_init(void)
 {
    GLuint v, f, program;
    const char *p;
    char msg[512];
+
+   struct es2gears_state *ret;
+
+   ret = calloc(1, sizeof(struct es2gears_state));
+   if (!ret)
+      goto error;
+
+   ret->view_rot[0] = 20.0;
+   ret->view_rot[1] = 30.0;
+   ret->view_rot[2] =  0.0;
 
    glEnable(GL_CULL_FACE);
    glEnable(GL_DEPTH_TEST);
@@ -682,44 +704,28 @@ void es2gears_init(void)
    glUseProgram(program);
 
    /* Get the locations of the uniforms so we can access them */
-   ModelViewProjectionMatrix_location = glGetUniformLocation(program, "ModelViewProjectionMatrix");
-   NormalMatrix_location = glGetUniformLocation(program, "NormalMatrix");
-   LightSourcePosition_location = glGetUniformLocation(program, "LightSourcePosition");
-   MaterialColor_location = glGetUniformLocation(program, "MaterialColor");
+   ret->ModelViewProjectionMatrix_location = glGetUniformLocation(program, "ModelViewProjectionMatrix");
+   ret->NormalMatrix_location = glGetUniformLocation(program, "NormalMatrix");
+   ret->LightSourcePosition_location = glGetUniformLocation(program, "LightSourcePosition");
+   ret->MaterialColor_location = glGetUniformLocation(program, "MaterialColor");
 
    /* Set the LightSourcePosition uniform which is constant throught the program */
-   glUniform4fv(LightSourcePosition_location, 1, LightSourcePosition);
+   glUniform4fv(ret->LightSourcePosition_location, 1, LightSourcePosition);
 
    /* make the gears */
-   gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
-   gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
-   gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
-}
+   ret->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
+   ret->gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
+   ret->gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
 
-#if 0
+   return ret;
 
-int
-main(int argc, char *argv[])
-{
-   /* Initialize the window */
-   eglutInitWindowSize(300, 300);
-   eglutInitAPIMask(EGLUT_OPENGL_ES2_BIT);
-   eglutInit(argc, argv);
-
-   eglutCreateWindow("es2gears");
-
-   /* Set up eglut callback functions */
-   eglutIdleFunc(gears_idle);
-   eglutReshapeFunc(gears_reshape);
-   eglutDisplayFunc(gears_draw);
-   eglutSpecialFunc(gears_special);
-
-   /* Initialize the gears */
-   gears_init();
-
-   eglutMainLoop();
-
+error:
    return 0;
 }
 
-#endif
+void es2gears_done(struct es2gears_state *state)
+{
+   free_gear(state->gear1);
+   free_gear(state->gear2);
+   free_gear(state->gear3);
+}
