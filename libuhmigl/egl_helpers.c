@@ -6,6 +6,7 @@
  ******************************************************************************/
 
 #include <glad/egl.h>
+#include <stddef.h>
 
 const char *eglErrorString(EGLint error)
 {

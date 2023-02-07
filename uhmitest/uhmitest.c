@@ -21,7 +21,11 @@
 
 int pr_use_stderr = 1;
 
-int main(__unused int argc, __unused char **argv)
+#ifndef __unused
+#define __unused __attribute__((unused))
+#endif
+
+int main(int argc, __unused char **argv)
 {
 	int err;
 	uint16_t h;

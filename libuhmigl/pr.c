@@ -5,11 +5,17 @@
  * permission. All rights reserved.
  ******************************************************************************/
 
+#include "pr.h"
+
 #ifdef __ANDROID__
 #include <android/log.h>
 #endif
 #include <stdio.h>
 #include <stdarg.h>
+
+#ifndef __unused
+#define __unused __attribute__((unused))
+#endif
 
 #ifdef __ANDROID__
 int pr_use_stderr __attribute__((weak)) = 0;
@@ -40,7 +46,7 @@ const char *pr_basename(const char *name)
 	return p;
 }
 
-int pr_log_print(int prio, const char* tag, const char* fmt, ...)
+int pr_log_print(int prio, __unused const char* tag, const char* fmt, ...)
 {
 	va_list ap;
 	int err;

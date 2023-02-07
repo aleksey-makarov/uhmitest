@@ -1,5 +1,5 @@
-#ifndef __libuhmigl_h__
-#define __libuhmigl_h__
+#ifndef __animated_pointer_h__
+#define __animated_pointer_h__
 
 // ISO C prohibits direct conversion between object and function pointers
 #define ANIMATED_POINTER(_type, _ptr) \

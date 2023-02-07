@@ -10,28 +10,20 @@
 #include <xf86drmMode.h>
 #include <glad/egl.h>
 #include <glad/gles2.h>
-#include <dlfcn.h>
 
 #include <assert.h>
 
 #include "animated_pointer.h"
 #include "drm_state.h"
 #include "egl_helpers.h"
+#include "loader.h"
 #define LOG_TAG "libuhmigl"
 #include "pr.h"
 
 static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
-static void *dl_handle;
 static void *eglGetProcAddress_ptr;
-
-#ifdef __ANDROID__
-static const char * dl_path_default = "/system/lib64/drm/libGLES_mesa.so";
-#else
-#error "FIXME"
-#endif
-static const char * dl_path_env_var_name = "LIBUHMIGL_DL_PATH";
 
 int libuhmigl_init(uint16_t *h, uint16_t *v)
 {
@@ -56,40 +48,24 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	if (v)
 		*v = drm_state_mode->vdisplay;
 
-	const char * dl_path = getenv(dl_path_env_var_name);
-
-	if (!dl_path)
-		dl_path = dl_path_default;
-
-	pr_info("dlopen(%s)", dl_path);
-	dl_handle = dlopen(dl_path, RTLD_NOW);
-	if (!dl_handle) {
-		pr_err("dlopen(%s): %s", dl_path, dlerror());
-		goto error_drm_state_done;
-	}
-
-	// clear any existing error
-	dlerror();
-
-	pr_info("dlsym(\"eglGetProcAddress\")");
-	eglGetProcAddress_ptr = dlsym(dl_handle, "eglGetProcAddress");
+	pr_info("loader_init()");
+	eglGetProcAddress_ptr = loader_init();
 	if (!eglGetProcAddress_ptr) {
-		char *dlerror_string = dlerror();
-		pr_err("dlsym(\"eglGetProcAddress\"): %s", dlerror_string ? dlerror_string : "???");
-		goto error_dlclose;
+		pr_err("loader_init()");
+		goto error_drm_state_done;
 	}
 
 	pr_info("gladLoadEGL(EGL_NO_DISPLAY, gl_eglGetProcAddress)");
 	version = gladLoadEGL(EGL_NO_DISPLAY, ANIMATED_POINTER(GLADloadfunc, eglGetProcAddress_ptr));
 	if (version == 0) {
 		pr_err("gladLoadEGL(EGL_NO_DISPLAY, gl_eglGetProcAddress)");
-		goto error_dlclose;
+		goto error_loader_done;
 	}
 	pr_info("Loaded EGL %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 
 	display = eglGetPlatformDisplayEXT(EGL_PLATFORM_GBM_KHR, drm_state_gbm_device, NULL);
 	if (display == EGL_NO_DISPLAY)
-		EGL_CHECK_ERROR("eglGetPlatformDisplayEXT()", error_dlclose);
+		EGL_CHECK_ERROR("eglGetPlatformDisplayEXT()", error_loader_done);
 
 	pr_info("eglInitialize()");
 	EGLint major, minor;
@@ -169,8 +145,8 @@ error_egl_release_thread:
 error_egl_terminate:
 	eglTerminate(display);
 
-error_dlclose:
-	dlclose(dl_handle);
+error_loader_done:
+	loader_done();
 
 error_drm_state_done:
 	pr_info("drm_state_done()");
@@ -186,7 +162,7 @@ void libuhmigl_done(void)
 	eglDestroySurface(display, surface);
 	eglReleaseThread();
 	eglTerminate(display);
-	dlclose(dl_handle);
+	loader_done();
 	drm_state_done();
 }
 

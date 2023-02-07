@@ -5,19 +5,12 @@
 # permission. All rights reserved.
 #-------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.9)
+add_executable(uhmitest uhmitest.c)
 
-project(uhmitest VERSION 0.0.1 DESCRIPTION "Test for libuhmigl" LANGUAGES C)
-
-add_compile_options(-Wall -Wextra -pedantic -Werror -O2)
+add_dependencies(uhmitest uhmigl es2gears)
+target_compile_options(uhmitest PRIVATE -Wall -Wextra -pedantic -Werror -O2)
+target_link_libraries(uhmitest PRIVATE uhmigl es2gears)
 
 include(GNUInstallDirs)
-
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(pkglibs REQUIRED libuhmigl)
-
-add_executable(uhmitest uhmitest.c es2gears.c)
-target_link_libraries(uhmitest PRIVATE m ${pkglibs_LIBRARIES})
-target_include_directories(uhmitest PRIVATE ${pkglibs_INCLUDE_DIRS})
 
 install(TARGETS uhmitest RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
