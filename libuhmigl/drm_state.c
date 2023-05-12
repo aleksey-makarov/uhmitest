@@ -28,6 +28,8 @@
 static const char * device_name_default = "/dev/dri/card2";
 static const char * device_name_env_var_name = "LIBUHMIGL_DEVICE_NAME";
 
+static const char * connector_number_env_var_name = "LIBUHMIGL_CONNECTOR_NUMBER";
+
 static int fd;
 static drmModeRes *resources;
 static drmModeConnector *connector;
@@ -58,11 +60,15 @@ int drm_state_init(void)
 	assert(!drm_state_gbm_surface);
 
 	const char * device_name = getenv(device_name_env_var_name);
-
 	if (!device_name)
 		device_name = device_name_default;
 
-	pr_info("open(%s)", device_name);
+	int connector_number = 0;
+	const char * connector_number_string = getenv(connector_number_env_var_name);
+	if (connector_number_string)
+		connector_number = atoi(connector_number_string);
+
+	pr_info("open(%s) (connector number: %d)", device_name, connector_number);
 	fd = open(device_name, O_RDWR);
 	if (fd < 0) {
 		pr_err("open(%s) (%s)", device_name, strerror(errno));
@@ -87,17 +93,18 @@ int drm_state_init(void)
 
 	pr_info("find a connected connector");
 	for (int c = 0; c < resources->count_connectors; c++) {
-		connector = drmModeGetConnector(fd, resources->connectors[c]);
-		pr_info("connector_id: %u, connection: %u (%s)",
-			(unsigned)connector->connector_id,
-			(unsigned)connector->connection,
-			connector->connection == DRM_MODE_CONNECTED ? "connected" : "-"
+		drmModeConnector *connector_tmp = drmModeGetConnector(fd, resources->connectors[c]);
+		int this = DRM_MODE_CONNECTED == connector_tmp->connection && connector_number-- == 0;
+		pr_info("%c connector_id: %u, connection: %u (%s)",
+			this ? '>' : ' ',
+			(unsigned)connector_tmp->connector_id,
+			(unsigned)connector_tmp->connection,
+			connector_tmp->connection == DRM_MODE_CONNECTED ? "connected" : "-"
 		);
-		if (DRM_MODE_CONNECTED == connector->connection) {
-			break;
-		}
-		drmModeFreeConnector(connector);
-		connector = 0;
+		if (this)
+			connector = connector_tmp;
+		else
+			drmModeFreeConnector(connector_tmp);
 	}
 
 	if (!connector) {
