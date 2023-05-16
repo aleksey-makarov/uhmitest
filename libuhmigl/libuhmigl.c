@@ -13,7 +13,6 @@
 
 #include <assert.h>
 
-#include "animated_pointer.h"
 #include "drm_state.h"
 #include "egl_helpers.h"
 #include "loader.h"
@@ -56,7 +55,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	}
 
 	pr_info("gladLoadEGL(EGL_NO_DISPLAY, gl_eglGetProcAddress)");
-	version = gladLoadEGL(EGL_NO_DISPLAY, ANIMATED_POINTER(GLADloadfunc, eglGetProcAddress_ptr));
+	version = gladLoadEGL(EGL_NO_DISPLAY, eglGetProcAddress_ptr);
 	if (version == 0) {
 		pr_err("gladLoadEGL(EGL_NO_DISPLAY, gl_eglGetProcAddress)");
 		goto error_loader_done;
@@ -73,7 +72,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	pr_info("EGL: %d.%d", (int)major, (int)minor);
 
 	pr_info("gladLoadEGL(display, gl_eglGetProcAddress)");
-	version = gladLoadEGL(display, ANIMATED_POINTER(GLADloadfunc, eglGetProcAddress_ptr));
+	version = gladLoadEGL(display, eglGetProcAddress_ptr);
 	if (version == 0) {
 		pr_err("gladLoadEGL(display, gl_eglGetProcAddress)");
 		goto error_egl_terminate;
@@ -189,7 +188,7 @@ int libuhmigl_load(void)
 	int version;
 
 	pr_info("gladLoadEGL(display, gl_eglGetProcAddress)");
-	version = gladLoadEGL(display, ANIMATED_POINTER(GLADloadfunc, eglGetProcAddress_ptr));
+	version = gladLoadEGL(display, eglGetProcAddress_ptr);
 	if (version == 0) {
 		pr_err("gladLoadEGL(display, gl_eglGetProcAddress)");
 		goto error;

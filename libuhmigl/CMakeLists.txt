@@ -10,7 +10,7 @@ add_library(uhmigl SHARED)
 include(FindPkgConfig)
 pkg_check_modules(extlibs REQUIRED egl glesv2 libdrm gbm)
 
-target_compile_options(uhmigl PRIVATE -Wall -Wextra -pedantic -Werror -O2 ${extlibs_CFLAGS_OTHER})
+target_compile_options(uhmigl PRIVATE -Wall -Wextra -Werror -O2 ${extlibs_CFLAGS_OTHER})
 target_include_directories(uhmigl PRIVATE ${extlibs_INCLUDE_DIRS} include)
 target_link_libraries(uhmigl PUBLIC ${extlibs_LIBRARIES})
 target_sources(uhmigl
