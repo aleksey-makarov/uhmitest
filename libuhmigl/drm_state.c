@@ -17,7 +17,6 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-#include "libuhmigl.h"
 #define LOG_TAG "libuhmigl"
 #include "pr.h"
 

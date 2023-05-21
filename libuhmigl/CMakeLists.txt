@@ -16,14 +16,6 @@ target_link_libraries(uhmigl PUBLIC ${extlibs_LIBRARIES})
 target_sources(uhmigl
     PRIVATE
         libuhmigl.c drm_state.c src/gles2.c src/egl.c loader.c pr.c egl_helpers.c
-    PUBLIC
-        FILE_SET uhmigl_headers
-            TYPE HEADERS
-            FILES libuhmigl.h pr.h
-        FILE_SET uhmigl_headers_glad
-            TYPE HEADERS
-            FILES include/EGL/eglplatform.h include/KHR/khrplatform.h include/glad/egl.h include/glad/gles2.h
-            BASE_DIRS include
 )
 
 set_target_properties(uhmigl
@@ -34,13 +26,21 @@ set_target_properties(uhmigl
 
 include(GNUInstallDirs)
 
+configure_file(libuhmigl.pc.in libuhmigl.pc @ONLY)
+configure_file(libuhmigl.h.in  libuhmigl.h  @ONLY)
+
 install(TARGETS uhmigl
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    FILE_SET uhmigl_headers DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libuhmigl
-    FILE_SET uhmigl_headers_glad DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libuhmigl
 )
 
-configure_file(libuhmigl.pc.in libuhmigl.pc @ONLY)
-
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libuhmigl.pc
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig)
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig
+)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libuhmigl.h pr.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libuhmigl
+)
+
+install(DIRECTORY include
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libuhmigl
+)
