@@ -8,13 +8,14 @@
 #ifndef __loader_h__
 #define __loader_h__
 
-/*
- * The loader library returns the address of the eglGetProcAddress() function
- * On Android it loads UHMI mesa library with dlopen().
- * On Linux it uses the mesa library linked to executable.
- */
+int loader_load_egl(void *display);
+int loader_load_gles(void);
 
-void *loader_init(void);
-void loader_done();
+#if __ANDROID__
+int loader_android_load_egl(void *display);
+int loader_android_load_gles(void);
+#endif
+
+void loader_done(void);
 
 #endif

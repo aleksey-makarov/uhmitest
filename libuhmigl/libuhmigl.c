@@ -5,11 +5,20 @@
  * permission. All rights reserved.
  ******************************************************************************/
 
+#include <libuhmigl.h>
+
 #include <stdlib.h>
 #include <gbm.h>
 #include <xf86drmMode.h>
-#include <glad/egl.h>
-#include <glad/gles2.h>
+#include <string.h>
+
+#ifdef GL_STATIC_LINKING
+# include <EGL/egl.h>
+# include <EGL/eglext.h>
+# include <EGL/eglplatform.h>
+#else
+# include <glad/egl.h>
+#endif
 
 #include <assert.h>
 
@@ -22,14 +31,12 @@
 static EGLDisplay display;
 static EGLSurface surface;
 static EGLContext context;
-static void *eglGetProcAddress_ptr;
 
 int libuhmigl_init(uint16_t *h, uint16_t *v)
 {
 	EGLConfig config;
 	EGLint num_config = 0;
 	int err;
-	int version;
 
 	pr_info("drm_state_init()");
 	err = drm_state_init();
@@ -47,37 +54,63 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	if (v)
 		*v = drm_state_mode->vdisplay;
 
-	pr_info("loader_init()");
-	eglGetProcAddress_ptr = loader_init();
-	if (!eglGetProcAddress_ptr) {
-		pr_err("loader_init()");
+	pr_info("loader_load_egl(EGL_NO_DISPLAY)");
+	err = loader_load_egl(EGL_NO_DISPLAY);
+	if (err) {
+		pr_err("loader_load_egl()");
 		goto error_drm_state_done;
 	}
 
-	pr_info("gladLoadEGL(EGL_NO_DISPLAY, gl_eglGetProcAddress)");
-	version = gladLoadEGL(EGL_NO_DISPLAY, eglGetProcAddress_ptr);
-	if (version == 0) {
-		pr_err("gladLoadEGL(EGL_NO_DISPLAY, gl_eglGetProcAddress)");
-		goto error_loader_done;
-	}
-	pr_info("Loaded EGL %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
+#ifdef GL_STATIC_LINKING
+	pr_info("eglQueryString(EGL_EXTENSIONS)");
+	char const * const supported_extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
 
+	pr_info("is EGL_EXT_platform_base supported?");
+	if (supported_extensions && strstr(supported_extensions, "EGL_EXT_platform_base")) {
+
+		pr_info("eglGetProcAddress(\"eglGetPlatformDisplayEXT\")");
+		typedef EGLDisplay eglGetPlatformDisplayEXT_t(EGLenum platform, void *native_display, const EGLint *attrib_list);
+		eglGetPlatformDisplayEXT_t *get_platform_display_ext = (eglGetPlatformDisplayEXT_t *)eglGetProcAddress("eglGetPlatformDisplayEXT");
+		if (get_platform_display_ext) {
+
+			pr_info("eglGetPlatformDisplayEXT()");
+			display = get_platform_display_ext(EGL_PLATFORM_GBM_KHR, drm_state_gbm_device, NULL);
+			if (!display) {
+				pr_err("eglGetPlatformDisplayEXT(), 0x%x", (unsigned)eglGetError());
+			}
+
+		} else {
+			pr_err("eglGetProcAddress(\"eglGetPlatformDisplayEXT\")");
+		}
+       }
+
+	if (!display) {
+		pr_info("eglGetDisplay()");
+		display = eglGetDisplay(drm_state_gbm_device);
+		if (!display)
+			EGL_CHECK_ERROR("eglGetDisplay()", error_loader_done);
+	}
+
+#else
+
+	pr_info("eglGetPlatformDisplayEXT()");
 	display = eglGetPlatformDisplayEXT(EGL_PLATFORM_GBM_KHR, drm_state_gbm_device, NULL);
 	if (display == EGL_NO_DISPLAY)
 		EGL_CHECK_ERROR("eglGetPlatformDisplayEXT()", error_loader_done);
+
+#endif
 
 	pr_info("eglInitialize()");
 	EGLint major, minor;
 	EGL_RET(eglInitialize(display, &major, &minor), error_egl_terminate);
 	pr_info("EGL: %d.%d", (int)major, (int)minor);
 
-	pr_info("gladLoadEGL(display, gl_eglGetProcAddress)");
-	version = gladLoadEGL(display, eglGetProcAddress_ptr);
-	if (version == 0) {
-		pr_err("gladLoadEGL(display, gl_eglGetProcAddress)");
+	pr_info("loader_load_egl(display)");
+	err = loader_load_egl(display);
+	if (err) {
+		pr_err("loader_load_egl()");
 		goto error_egl_terminate;
 	}
-	pr_info("Loaded EGL %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 
 	pr_info("eglBindAPI(EGL_OPENGL_ES_API)");
 	EGL_RET(eglBindAPI(EGL_OPENGL_ES_API), error_egl_terminate);
@@ -119,13 +152,12 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	pr_info("eglMakeCurrent()");
 	EGL_RET(eglMakeCurrent(display, surface, surface, context), error_egl_destroy_context);
 
-	pr_info("gladLoadGLES2(eglGetProcAddress)");
-	version = gladLoadGLES2(eglGetProcAddress);
-	if (version == 0) {
-		pr_err("gladLoadGLES2(eglGetProcAddress)");
+	pr_info("loader_load_gles()");
+	err = loader_load_gles();
+	if (err) {
+		pr_err("loader_load_gles()");
 		goto error_egl_make_current;
 	}
-	pr_info("Loaded OpenGLES2 %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 
 	return 0;
 
@@ -185,23 +217,23 @@ error:
 
 int libuhmigl_load(void)
 {
-	int version;
+	int err;
 
-	pr_info("gladLoadEGL(display, gl_eglGetProcAddress)");
-	version = gladLoadEGL(display, eglGetProcAddress_ptr);
-	if (version == 0) {
-		pr_err("gladLoadEGL(display, gl_eglGetProcAddress)");
+	pr_info("loader_load_egl(display)");
+	err = loader_load_egl(display);
+	if (err) {
+		pr_err("loader_load_egl()");
 		goto error;
 	}
-	pr_info("Loaded EGL %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 
-	pr_info("gladLoadGLES2(eglGetProcAddress)");
-	version = gladLoadGLES2(eglGetProcAddress);
-	if (version == 0) {
-		pr_err("gladLoadGLES2(eglGetProcAddress)");
+
+	pr_info("loader_load_gles()");
+	err = loader_load_gles();
+	if (err) {
+		pr_err("loader_load_gles()");
 		goto error;
 	}
-	pr_info("Loaded OpenGLES2 %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
+
 
 	return 0;
 error:

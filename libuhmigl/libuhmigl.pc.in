@@ -2,7 +2,7 @@ Name: libuhmigl
 Description: Unified Human-Machine Interface GL library
 Version: 0.1
 
-Requires: libdrm gbm egl
+Requires: libdrm gbm egl glesv2
 
 Libs: -L@CMAKE_INSTALL_FULL_LIBDIR@ -luhmigl
 Cflags: -I@CMAKE_INSTALL_FULL_INCLUDEDIR@ -I@CMAKE_INSTALL_FULL_INCLUDEDIR@/libuhmigl

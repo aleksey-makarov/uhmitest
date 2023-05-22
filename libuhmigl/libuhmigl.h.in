@@ -8,8 +8,14 @@
 #ifndef __libuhmigl_h__
 #define __libuhmigl_h__
 
+#cmakedefine GL_STATIC_LINKING
+
 #include <stdint.h>
-#include <glad/gles2.h>
+#ifdef GL_STATIC_LINKING
+# include <GLES2/gl2.h>
+#else
+# include <glad/gles2.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
