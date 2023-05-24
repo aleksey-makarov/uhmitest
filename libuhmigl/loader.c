@@ -72,6 +72,7 @@ void loader_done(void)
 
 #include <dlfcn.h>
 #include <stdlib.h>
+#include <glad/egl.h>
 
 static const char * dl_path_default = "/system/lib64/drm/libGLES_mesa.so";
 static const char * dl_path_env_var_name = "LIBUHMIGL_DL_PATH";
@@ -114,6 +115,43 @@ error_dlclose:
 
 error:
 	return NULL;
+}
+
+int loader_load_egl(void *display)
+{
+	void *a = get_eglGetProcAddress();
+	if (!a) {
+		pr_err("get_eglGetProcAddress()");
+		return -1;
+	}
+
+	int version = gladLoadEGL(display, a);
+	if (version == 0) {
+		pr_err("gladLoadEGL(0x%016lx, a)", (unsigned long)display);
+		return -1;
+	}
+	pr_info("Loaded EGL %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
+
+	return 0;
+}
+
+
+int loader_load_gles(void)
+{
+	void *a = get_eglGetProcAddress();
+	if (!a) {
+		pr_err("get_eglGetProcAddress()");
+		return -1;
+	}
+
+	int version = gladLoadGLES2(a);
+	if (version == 0) {
+		pr_err("gladLoadGLES2(eglGetProcAddress)");
+		return -1;
+        }
+	pr_info("Loaded OpenGLES2 %d.%d", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
+
+	return 0;
 }
 
 void loader_done(void)
