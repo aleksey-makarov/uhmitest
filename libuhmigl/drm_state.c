@@ -70,7 +70,7 @@ int drm_state_init(void)
 	pr_info("open(%s) (connector number: %d)", device_name, connector_number);
 	fd = open(device_name, O_RDWR);
 	if (fd < 0) {
-		pr_err("open(%s) (%s)", device_name, strerror(errno));
+		pr_err("open(%s) (%s) (device could be specified with %s environment variable)", device_name, strerror(errno), device_name_env_var_name);
 		fd = 0;
 		goto error;
 	}
