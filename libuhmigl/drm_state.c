@@ -112,32 +112,38 @@ int drm_state_init(void)
 	}
 
 	pr_info("find resolution (full-screen)");
-	unsigned int bestArea = 0;
+	unsigned int best_area = 0;
+	drmModeModeInfo* best_mode = NULL;
 	for (int m = 0; m < connector->count_modes; m++) {
-		drmModeModeInfo* curMode = &connector->modes[m];
+		drmModeModeInfo* cur_mode = &connector->modes[m];
+#if 0
 		pr_info("mode: \"%s\" %ux%u%s",
-			curMode->name,
-			(unsigned)curMode->hdisplay,
-			(unsigned)curMode->vdisplay,
-			curMode->type & DRM_MODE_TYPE_PREFERRED ? " (preferred)" : "");
-		if (curMode->type & DRM_MODE_TYPE_PREFERRED) {
-			pr_info("found a preferred mode");
-			drm_state_mode = curMode;
-			break;
+			cur_mode->name,
+			(unsigned)cur_mode->hdisplay,
+			(unsigned)cur_mode->vdisplay,
+			cur_mode->type & DRM_MODE_TYPE_PREFERRED ? " (preferred)" : "");
+#endif
+		unsigned int cur_area = cur_mode->hdisplay * cur_mode->vdisplay;
+		if (cur_area > best_area) {
+			best_mode = cur_mode;
+			best_area = cur_area;
 		}
-		unsigned int curArea = curMode->hdisplay * curMode->vdisplay;
-		if (curArea > bestArea) {
-			drm_state_mode = curMode;
-			bestArea = curArea;
+		if (cur_mode->type & DRM_MODE_TYPE_PREFERRED) {
+			drm_state_mode = cur_mode;
 		}
 	}
 
 	if (!drm_state_mode) {
-		pr_err("failed to find a suitable mode");
-		goto error_free_connector;
+		if (best_mode) {
+			pr_err("no preferred mode, use the best one");
+			drm_state_mode = best_mode;
+		} else {
+			pr_err("failed to find a suitable mode");
+			goto error_free_connector;
+		}
 	}
 
-	pr_info("mode: \"%s\" %ux%u",
+	pr_info("final mode: \"%s\" %ux%u",
 		drm_state_mode->name,
 		(unsigned)drm_state_mode->hdisplay,
 		(unsigned)drm_state_mode->vdisplay);
@@ -179,6 +185,11 @@ encoder_found:
 		pr_info("drmModeGetCrtc()");
 		goto error_free_encoder;
 	}
+
+	pr_info("current mode: \"%s\" %ux%u",
+		crtc->mode.name,
+		(unsigned)crtc->mode.hdisplay,
+		(unsigned)crtc->mode.vdisplay);
 
 	pr_info("gbm_create_device()");
 	drm_state_gbm_device = gbm_create_device(fd);
