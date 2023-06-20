@@ -41,8 +41,8 @@ typedef EGLSurface eglCreatePlatformWindowSurfaceEXT_t(EGLDisplay dpy, EGLConfig
 
 int libuhmigl_init(uint16_t *h, uint16_t *v)
 {
-	EGLConfig config;
-	EGLint num_config = 0;
+	EGLint num_config;
+	EGLint num_config2;
 	int err;
 
 	display = EGL_NO_DISPLAY;
@@ -132,23 +132,73 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		, EGL_NONE
 		};
 
-	pr_info("eglChooseConfig()");
-	EGL_RET(eglChooseConfig(display, config_attrs, &config, 1, &num_config), error_egl_release_thread);
+	pr_info("eglChooseConfig(0)");
+	EGL_RET(eglChooseConfig(display, config_attrs, NULL, 0, &num_config), error_egl_release_thread);
 	if (num_config < 1) {
 		pr_err("num_config < 1");
 		goto error_egl_release_thread;
 	}
 
-	EGLint attr_native_visual_id;
-	EGL_RET(eglGetConfigAttrib(display, config, EGL_NATIVE_VISUAL_ID, & attr_native_visual_id), error_egl_release_thread);
+	EGLConfig *configs = calloc(num_config, sizeof(EGLConfig));
+	assert(configs);
 
-	pr_info("drm_surface_create(%u (%c%c%c%c))",
-		(unsigned)attr_native_visual_id,
-		(char)((attr_native_visual_id >>  0) & 0xff),
-		(char)((attr_native_visual_id >>  8) & 0xff),
-		(char)((attr_native_visual_id >> 16) & 0xff),
-		(char)((attr_native_visual_id >> 24) & 0xff)
-	);
+	pr_info("eglChooseConfig(%u)", num_config);
+	EGL_RET(eglChooseConfig(display, config_attrs, configs, num_config, &num_config2), error_egl_release_thread);
+	if (num_config != num_config2) {
+		pr_err("num_config != num_config2");
+		goto error_egl_release_thread;
+	}
+
+#define GET_ATTRIBUTE(NAME) \
+		EGLint attr_ ## NAME; \
+		EGL_RET(eglGetConfigAttrib(display, configs[i], EGL_ ## NAME, & attr_ ## NAME), error_egl_release_thread);
+
+	int i;
+	int valid_config_index = -1;
+
+	for (i = 0; i < num_config; i++) {
+
+		GET_ATTRIBUTE(NATIVE_VISUAL_ID);
+
+		if (valid_config_index == -1 && attr_NATIVE_VISUAL_ID == GBM_FORMAT_XRGB8888) {
+			valid_config_index = i;
+
+			GET_ATTRIBUTE(CONFIG_ID);
+			GET_ATTRIBUTE(BUFFER_SIZE);
+			GET_ATTRIBUTE(ALPHA_SIZE);
+			GET_ATTRIBUTE(RED_SIZE);
+			GET_ATTRIBUTE(GREEN_SIZE);
+			GET_ATTRIBUTE(BLUE_SIZE);
+			GET_ATTRIBUTE(DEPTH_SIZE);
+			GET_ATTRIBUTE(STENCIL_SIZE);
+			GET_ATTRIBUTE(SAMPLES);
+
+			char format_string[5];
+			format_string[0] = (char)((attr_NATIVE_VISUAL_ID >>  0) & 0xff);
+			format_string[1] = (char)((attr_NATIVE_VISUAL_ID >>  8) & 0xff);
+			format_string[2] = (char)((attr_NATIVE_VISUAL_ID >> 16) & 0xff);
+			format_string[3] = (char)((attr_NATIVE_VISUAL_ID >> 24) & 0xff);
+			format_string[4] = 0;
+
+			pr_info("id: %u, format=%u (\"%s\"), buffer_size=%u, alpha=%u, red=%u, green=%u, blue=%u, depth=%u, stencil=%u, samples=%u",
+				attr_CONFIG_ID, attr_NATIVE_VISUAL_ID, format_string,
+				attr_BUFFER_SIZE, attr_ALPHA_SIZE, attr_RED_SIZE, attr_GREEN_SIZE, attr_BLUE_SIZE, attr_DEPTH_SIZE, attr_STENCIL_SIZE, attr_SAMPLES
+			);
+
+			break;
+		}
+	}
+
+#undef GET_ATTRIBUTE
+
+	if (valid_config_index == -1) {
+		pr_err("could not find a good configuration");
+		goto error_egl_release_thread;
+	}
+
+
+	EGLint attr_native_visual_id;
+	EGL_RET(eglGetConfigAttrib(display, configs[valid_config_index], EGL_NATIVE_VISUAL_ID, & attr_native_visual_id), error_egl_release_thread);
 
 	pr_info("drm_surface_create(%u)", attr_native_visual_id);
 	gbm_surface = drm_surface_create((uint32_t)attr_native_visual_id);
@@ -180,7 +230,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 #else
 
 	pr_info("eglCreatePlatformWindowSurfaceEXT()");
-	surface = eglCreatePlatformWindowSurfaceEXT(display, config, gbm_surface, NULL);
+	surface = eglCreatePlatformWindowSurfaceEXT(display, configs[valid_config_index], gbm_surface, NULL);
 	if (surface == EGL_NO_SURFACE)
 		EGL_CHECK_ERROR("eglCreateWindowSurface()", error_drm_surface_destroy);
 
@@ -192,7 +242,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		};
 
 	pr_info("eglCreateContext()");
-	context = eglCreateContext(display, config, EGL_NO_CONTEXT, context_attrs);
+	context = eglCreateContext(display, configs[valid_config_index], EGL_NO_CONTEXT, context_attrs);
 	if (context == EGL_NO_CONTEXT)
 		EGL_CHECK_ERROR("eglCreateContext()", error_egl_destroy_surface);
 
