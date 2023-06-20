@@ -140,8 +140,19 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		goto error_egl_release_thread;
 	}
 
-	pr_info("drm_surface_create(0)");
-	gbm_surface = drm_surface_create(0);
+	EGLint attr_native_visual_id;
+	EGL_RET(eglGetConfigAttrib(display, config, EGL_NATIVE_VISUAL_ID, & attr_native_visual_id), error_egl_release_thread);
+
+	pr_info("drm_surface_create(%u (%c%c%c%c))",
+		(unsigned)attr_native_visual_id,
+		(char)((attr_native_visual_id >>  0) & 0xff),
+		(char)((attr_native_visual_id >>  8) & 0xff),
+		(char)((attr_native_visual_id >> 16) & 0xff),
+		(char)((attr_native_visual_id >> 24) & 0xff)
+	);
+
+	pr_info("drm_surface_create(%u)", attr_native_visual_id);
+	gbm_surface = drm_surface_create((uint32_t)attr_native_visual_id);
 	if (!gbm_surface) {
 		pr_err("drm_surface_create()");
 		goto error_egl_release_thread;
