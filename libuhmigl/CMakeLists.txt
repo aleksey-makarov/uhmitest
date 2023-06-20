@@ -12,7 +12,6 @@ option(GL_STATIC_LINKING "Don't use eglGetProcAddress() to load egl/gles functio
 include(FindPkgConfig)
 pkg_check_modules(extlibs REQUIRED egl glesv2 libdrm gbm)
 
-target_compile_options(uhmigl PRIVATE -Wall -Wextra -Werror -O2 ${extlibs_CFLAGS_OTHER})
 target_include_directories(uhmigl PRIVATE ${extlibs_INCLUDE_DIRS} include ${CMAKE_BINARY_DIR}/libuhmigl)
 target_link_libraries(uhmigl PUBLIC ${extlibs_LIBRARIES})
 target_sources(uhmigl
