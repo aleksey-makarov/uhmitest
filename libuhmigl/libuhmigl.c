@@ -30,6 +30,7 @@
 
 static EGLDisplay display;
 static EGLSurface surface;
+static struct gbm_surface *gbm_surface;
 static EGLContext context;
 
 int libuhmigl_init(uint16_t *h, uint16_t *v)
@@ -46,7 +47,6 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	}
 
 	assert(drm_state_gbm_device);
-	assert(drm_state_gbm_surface);
 	assert(drm_state_mode);
 
 	if (h)
@@ -134,10 +134,17 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		goto error_egl_release_thread;
 	}
 
+	pr_info("drm_surface_create(0)");
+	gbm_surface = drm_surface_create(0);
+	if (!gbm_surface) {
+		pr_err("drm_surface_create()");
+		goto error_egl_release_thread;
+	}
+
 	pr_info("eglCreateWindowSurface()");
-	surface = eglCreateWindowSurface(display, config, drm_state_gbm_surface, NULL);
+	surface = eglCreateWindowSurface(display, config, gbm_surface, NULL);
 	if (surface == EGL_NO_SURFACE)
-		EGL_CHECK_ERROR("eglCreateWindowSurface()", error_egl_release_thread);
+		EGL_CHECK_ERROR("eglCreateWindowSurface()", error_drm_surface_destroy);
 
 	static const EGLint context_attrs[] =
 		{ EGL_CONTEXT_CLIENT_VERSION, 2
@@ -170,6 +177,9 @@ error_egl_destroy_context:
 error_egl_destroy_surface:
 	eglDestroySurface(display, surface);
 
+error_drm_surface_destroy:
+	drm_surface_destroy(gbm_surface);
+
 error_egl_release_thread:
 	eglReleaseThread();
 
@@ -191,6 +201,7 @@ void libuhmigl_done(void)
 	eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 	eglDestroyContext(display, context);
 	eglDestroySurface(display, surface);
+	drm_surface_destroy(gbm_surface);
 	eglReleaseThread();
 	eglTerminate(display);
 	loader_done();

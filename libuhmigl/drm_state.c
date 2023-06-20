@@ -198,22 +198,8 @@ encoder_found:
 		goto error_free_crtc;
 	}
 
-	pr_info("gbm_surface_create()");
-	drm_state_gbm_surface = gbm_surface_create(drm_state_gbm_device,
-						   drm_state_mode->hdisplay,
-						   drm_state_mode->vdisplay,
-						   0,
-						   GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
-	if (!drm_state_gbm_surface) {
-		pr_err("gbm_surface_create()");
-		goto error_device_destroy;
-	}
-
 	return 0;
 
-error_device_destroy:
-	gbm_device_destroy(drm_state_gbm_device);
-	drm_state_gbm_device = 0;
 error_free_crtc:
 	drmModeFreeCrtc(crtc);
 	crtc = 0;
@@ -245,10 +231,6 @@ void drm_state_done(void)
 	assert(drm_state_gbm_device);
 	assert(drm_state_gbm_surface);
 
-	pr_info("gbm_surface_destroy()");
-	gbm_surface_destroy(drm_state_gbm_surface);
-	drm_state_gbm_surface = 0;
-
 	pr_info("gbm_device_destroy()");
 	gbm_device_destroy(drm_state_gbm_device);
 	drm_state_gbm_device = 0;
@@ -276,6 +258,31 @@ void drm_state_done(void)
 	pr_info("close()");
 	close(fd);
 	fd = 0;
+}
+
+struct gbm_surface *drm_surface_create(uint32_t format)
+{
+	pr_info("gbm_surface_create(h=%u,v=%u,format=%u)", drm_state_mode->hdisplay, drm_state_mode->vdisplay, format);
+	drm_state_gbm_surface = gbm_surface_create(drm_state_gbm_device,
+		drm_state_mode->hdisplay,
+		drm_state_mode->vdisplay,
+		format,
+		GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING);
+	if (!drm_state_gbm_surface) {
+		pr_err("gbm_surface_create()");
+		goto error;
+	}
+
+	return drm_state_gbm_surface;
+
+error:
+	return NULL;
+}
+
+void drm_surface_destroy(struct gbm_surface *surface)
+{
+	pr_info("gbm_surface_destroy()");
+	gbm_surface_destroy(surface);
 }
 
 /* Frame buffer allocation
