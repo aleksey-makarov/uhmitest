@@ -10,18 +10,13 @@
 
 #include <stdint.h>
 
-int drm_state_init(void);
+/* Returns native display */
+void *drm_state_init(uint16_t *h, uint16_t *v);
 void drm_state_done(void);
 
-struct gbm_surface;
+/* Returns native window */
 struct gbm_surface *drm_surface_create(uint32_t format);
-void drm_surface_destroy(struct gbm_surface *surface);
-
-struct gbm_device;
-extern struct gbm_device *drm_state_gbm_device;
-
-struct _drmModeModeInfo;
-extern struct _drmModeModeInfo *drm_state_mode;
+void drm_surface_destroy(void);
 
 int drm_state_flip(void);
 

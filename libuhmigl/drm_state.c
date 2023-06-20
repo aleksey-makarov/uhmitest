@@ -35,7 +35,7 @@ static drmModeConnector *connector;
 static drmModeEncoder *encoder;
 static drmModeCrtc *crtc;
 
-drmModeModeInfo *drm_state_mode;
+static drmModeModeInfo *drm_state_mode;
 struct gbm_device *drm_state_gbm_device;
 struct gbm_surface *drm_state_gbm_surface;
 
@@ -48,7 +48,7 @@ struct fb_state {
 	struct fb_state *next;
 };
 
-int drm_state_init(void)
+void *drm_state_init(uint16_t *h, uint16_t *v)
 {
 	assert(!fd);
 	assert(!resources);
@@ -198,7 +198,12 @@ encoder_found:
 		goto error_free_crtc;
 	}
 
-	return 0;
+	if (h)
+		*h = drm_state_mode->hdisplay;
+	if (v)
+		*v = drm_state_mode->vdisplay;
+
+	return drm_state_gbm_device;
 
 error_free_crtc:
 	drmModeFreeCrtc(crtc);
@@ -216,7 +221,7 @@ error_close:
 	close(fd);
 	fd = 0;
 error:
-	return -1;
+	return NULL;
 }
 
 void drm_state_done(void)
@@ -229,7 +234,6 @@ void drm_state_done(void)
 	assert(encoder);
 	assert(crtc);
 	assert(drm_state_gbm_device);
-	assert(drm_state_gbm_surface);
 
 	pr_info("gbm_device_destroy()");
 	gbm_device_destroy(drm_state_gbm_device);
@@ -260,7 +264,7 @@ void drm_state_done(void)
 	fd = 0;
 }
 
-struct gbm_surface *drm_surface_create(uint32_t format)
+void *drm_surface_create(uint32_t format)
 {
 	pr_info("gbm_surface_create(h=%u,v=%u,format=%u)", drm_state_mode->hdisplay, drm_state_mode->vdisplay, format);
 	drm_state_gbm_surface = gbm_surface_create(drm_state_gbm_device,
@@ -279,10 +283,10 @@ error:
 	return NULL;
 }
 
-void drm_surface_destroy(struct gbm_surface *surface)
+void drm_surface_destroy(void)
 {
 	pr_info("gbm_surface_destroy()");
-	gbm_surface_destroy(surface);
+	gbm_surface_destroy(drm_state_gbm_surface);
 }
 
 /* Frame buffer allocation

@@ -31,6 +31,7 @@
 static EGLDisplay display;
 static EGLSurface surface;
 static struct gbm_surface *gbm_surface;
+static struct gbm_device *gbm_device;
 static EGLContext context;
 
 int libuhmigl_init(uint16_t *h, uint16_t *v)
@@ -40,19 +41,11 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	int err;
 
 	pr_info("drm_state_init()");
-	err = drm_state_init();
-	if (err) {
+	gbm_device = drm_state_init(h, v);
+	if (!gbm_device) {
 		pr_err("drm_state_init()");
 		goto error;
 	}
-
-	assert(drm_state_gbm_device);
-	assert(drm_state_mode);
-
-	if (h)
-		*h = drm_state_mode->hdisplay;
-	if (v)
-		*v = drm_state_mode->vdisplay;
 
 	pr_info("loader_load_egl(EGL_NO_DISPLAY)");
 	err = loader_load_egl(EGL_NO_DISPLAY);
@@ -74,7 +67,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		if (get_platform_display_ext) {
 
 			pr_info("eglGetPlatformDisplayEXT()");
-			display = get_platform_display_ext(EGL_PLATFORM_GBM_KHR, drm_state_gbm_device, NULL);
+			display = get_platform_display_ext(EGL_PLATFORM_GBM_KHR, gbm_device, NULL);
 			if (!display) {
 				pr_err("eglGetPlatformDisplayEXT(), 0x%x", (unsigned)eglGetError());
 			}
@@ -86,7 +79,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 
 	if (!display) {
 		pr_info("eglGetDisplay()");
-		display = eglGetDisplay(drm_state_gbm_device);
+		display = eglGetDisplay(gbm_device);
 		if (!display)
 			EGL_CHECK_ERROR("eglGetDisplay()", error_loader_done);
 	}
@@ -94,7 +87,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 #else
 
 	pr_info("eglGetPlatformDisplayEXT()");
-	display = eglGetPlatformDisplayEXT(EGL_PLATFORM_GBM_KHR, drm_state_gbm_device, NULL);
+	display = eglGetPlatformDisplayEXT(EGL_PLATFORM_GBM_KHR, gbm_device, NULL);
 	if (display == EGL_NO_DISPLAY)
 		EGL_CHECK_ERROR("eglGetPlatformDisplayEXT()", error_loader_done);
 
@@ -178,7 +171,7 @@ error_egl_destroy_surface:
 	eglDestroySurface(display, surface);
 
 error_drm_surface_destroy:
-	drm_surface_destroy(gbm_surface);
+	drm_surface_destroy();
 
 error_egl_release_thread:
 	eglReleaseThread();
@@ -201,7 +194,7 @@ void libuhmigl_done(void)
 	eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 	eglDestroyContext(display, context);
 	eglDestroySurface(display, surface);
-	drm_surface_destroy(gbm_surface);
+	drm_surface_destroy();
 	eglReleaseThread();
 	eglTerminate(display);
 	loader_done();
