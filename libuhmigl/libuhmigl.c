@@ -34,11 +34,19 @@ static struct gbm_surface *gbm_surface;
 static struct gbm_device *gbm_device;
 static EGLContext context;
 
+#ifdef GL_STATIC_LINKING
+typedef EGLDisplay eglGetPlatformDisplayEXT_t(EGLenum platform, void *native_display, const EGLint *attrib_list);
+typedef EGLSurface eglCreatePlatformWindowSurfaceEXT_t(EGLDisplay dpy, EGLConfig config, void *native_window, const EGLint *attrib_list);
+#endif
+
 int libuhmigl_init(uint16_t *h, uint16_t *v)
 {
 	EGLConfig config;
 	EGLint num_config = 0;
 	int err;
+
+	display = EGL_NO_DISPLAY;
+	surface = EGL_NO_SURFACE;
 
 	pr_info("drm_state_init()");
 	gbm_device = drm_state_init(h, v);
@@ -58,29 +66,34 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 	pr_info("eglQueryString(EGL_EXTENSIONS)");
 	char const * const supported_extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
 
+	eglGetPlatformDisplayEXT_t *get_platform_display_ext = NULL;
+	eglCreatePlatformWindowSurfaceEXT_t *create_platform_window_surface_ext = NULL;
+
 	pr_info("is EGL_EXT_platform_base supported?");
 	if (supported_extensions && strstr(supported_extensions, "EGL_EXT_platform_base")) {
-
 		pr_info("eglGetProcAddress(\"eglGetPlatformDisplayEXT\")");
-		typedef EGLDisplay eglGetPlatformDisplayEXT_t(EGLenum platform, void *native_display, const EGLint *attrib_list);
-		eglGetPlatformDisplayEXT_t *get_platform_display_ext = (eglGetPlatformDisplayEXT_t *)eglGetProcAddress("eglGetPlatformDisplayEXT");
-		if (get_platform_display_ext) {
+		get_platform_display_ext = (eglGetPlatformDisplayEXT_t *)eglGetProcAddress("eglGetPlatformDisplayEXT");
 
-			pr_info("eglGetPlatformDisplayEXT()");
-			display = get_platform_display_ext(EGL_PLATFORM_GBM_KHR, gbm_device, NULL);
-			if (!display) {
-				pr_err("eglGetPlatformDisplayEXT(), 0x%x", (unsigned)eglGetError());
-			}
+		pr_info("eglGetProcAddress(\"eglCreatePlatformWindowSurfaceEXT\")");
+		create_platform_window_surface_ext = (eglCreatePlatformWindowSurfaceEXT_t *)eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT");
+	}
 
-		} else {
-			pr_err("eglGetProcAddress(\"eglGetPlatformDisplayEXT\")");
+	if (get_platform_display_ext) {
+
+		pr_info("get_platform_display_ext()");
+		display = get_platform_display_ext(EGL_PLATFORM_GBM_KHR, gbm_device, NULL);
+		if (display == EGL_NO_DISPLAY) {
+			pr_err("eglGetPlatformDisplayEXT(), 0x%x", (unsigned)eglGetError());
 		}
-       }
 
-	if (!display) {
+	} else {
+		pr_err("eglGetProcAddress(\"eglGetPlatformDisplayEXT\")");
+	}
+
+	if (display == EGL_NO_DISPLAY) {
 		pr_info("eglGetDisplay()");
 		display = eglGetDisplay(gbm_device);
-		if (!display)
+		if (display == EGL_NO_DISPLAY)
 			EGL_CHECK_ERROR("eglGetDisplay()", error_loader_done);
 	}
 
@@ -134,10 +147,34 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		goto error_egl_release_thread;
 	}
 
-	pr_info("eglCreateWindowSurface()");
-	surface = eglCreateWindowSurface(display, config, gbm_surface, NULL);
+#ifdef GL_STATIC_LINKING
+
+	if (create_platform_window_surface_ext) {
+
+		pr_info("create_platform_window_surface_ext()");
+		surface = create_platform_window_surface_ext(display, configs[valid_config_index], gbm_surface, NULL);
+		if (surface == EGL_NO_SURFACE) {
+			pr_err("eglGetPlatformDisplayEXT(), 0x%x", (unsigned)eglGetError());
+		}
+
+	} else {
+		pr_err("eglGetProcAddress(\"eglCreatePlatformWindowSurfaceEXT\")");
+	}
+
+	if (surface == EGL_NO_SURFACE) {
+		pr_info("create_platform_window_surface_ext()");
+		surface = create_platform_window_surface_ext(display, configs[valid_config_index], gbm_surface, NULL);
+		if (surface == EGL_NO_SURFACE)
+			EGL_CHECK_ERROR("create_platform_window_surface_ext()", error_drm_surface_destroy);
+	}
+#else
+
+	pr_info("eglCreatePlatformWindowSurfaceEXT()");
+	surface = eglCreatePlatformWindowSurfaceEXT(display, config, gbm_surface, NULL);
 	if (surface == EGL_NO_SURFACE)
 		EGL_CHECK_ERROR("eglCreateWindowSurface()", error_drm_surface_destroy);
+
+#endif
 
 	static const EGLint context_attrs[] =
 		{ EGL_CONTEXT_CLIENT_VERSION, 2
