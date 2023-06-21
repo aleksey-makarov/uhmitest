@@ -126,7 +126,6 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		, EGL_RED_SIZE,        8
 		, EGL_GREEN_SIZE,      8
 		, EGL_BLUE_SIZE,       8
-		, EGL_ALPHA_SIZE,      8
 		, EGL_DEPTH_SIZE,      16
 		, EGL_CONFORMANT,      EGL_OPENGL_ES2_BIT
 		, EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT
