@@ -198,6 +198,8 @@ encoder_found:
 		goto error_free_crtc;
 	}
 
+	pr_info("gbm device backend: %s", gbm_device_get_backend_name(drm_state_gbm_device));
+
 	if (h)
 		*h = drm_state_mode->hdisplay;
 	if (v)
