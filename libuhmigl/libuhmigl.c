@@ -139,6 +139,7 @@ int libuhmigl_init(uint16_t *h, uint16_t *v)
 		goto error_egl_release_thread;
 	}
 
+	// FIXME: Where is it free()ed?
 	EGLConfig *configs = calloc(num_config, sizeof(EGLConfig));
 	assert(configs);
 
